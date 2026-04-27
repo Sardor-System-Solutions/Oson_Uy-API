@@ -9,13 +9,15 @@ import {
   ParseIntPipe,
   BadRequestException,
   UseGuards,
+  Req,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { LeadsService } from './leads.service';
 import { CreateLeadDto } from './dto/create-lead.dto';
 import { UpdateLeadDto } from './dto/update-lead.dto';
 import { FilterLeadDto } from './dto/filter-lead.dto';
-import { AdminApiKeyGuard } from '../common/guards/admin-api-key.guard';
+import { DeveloperAuthGuard } from '../common/guards/developer-auth.guard';
+import { Request } from 'express';
 
 @ApiTags('leads')
 @Controller('leads')
@@ -31,6 +33,7 @@ export class LeadsController {
   }
 
   @Get()
+  @UseGuards(DeveloperAuthGuard)
   @ApiOperation({ summary: 'Get all leads with optional filtering' })
   @ApiQuery({
     name: 'projectId',
@@ -48,39 +51,50 @@ export class LeadsController {
     status: 200,
     description: 'List of leads with apartment and project details',
   })
-  findAll(@Query() filters: FilterLeadDto) {
-    return this.leadsService.findAll(filters);
+  findAll(
+    @Query() filters: FilterLeadDto,
+    @Req() request: Request & { developerId?: number },
+  ) {
+    return this.leadsService.findAll(filters, request.developerId);
   }
 
   @Get(':id')
+  @UseGuards(DeveloperAuthGuard)
   @ApiOperation({ summary: 'Get a specific lead by ID' })
   @ApiResponse({ status: 200, description: 'Lead found' })
   @ApiResponse({ status: 404, description: 'Lead not found' })
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.leadsService.findOne(id);
+  findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() request: Request & { developerId?: number },
+  ) {
+    return this.leadsService.findOne(id, request.developerId);
   }
 
   @Patch(':id')
-  @UseGuards(AdminApiKeyGuard)
+  @UseGuards(DeveloperAuthGuard)
   @ApiOperation({ summary: 'Update lead status' })
   @ApiResponse({ status: 200, description: 'Lead updated successfully' })
   @ApiResponse({ status: 404, description: 'Lead not found' })
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateLeadDto: UpdateLeadDto,
+    @Req() request: Request & { developerId?: number },
   ) {
-    return this.leadsService.update(id, updateLeadDto);
+    return this.leadsService.update(id, updateLeadDto, request.developerId);
   }
 
   @Post(':id/feedback-request')
-  @UseGuards(AdminApiKeyGuard)
+  @UseGuards(DeveloperAuthGuard)
   @ApiOperation({ summary: 'Create feedback request link for lead' })
   @ApiResponse({
     status: 201,
     description: 'Feedback request link created successfully',
   })
-  createFeedbackRequest(@Param('id', ParseIntPipe) id: number) {
-    return this.leadsService.createFeedbackRequest(id);
+  createFeedbackRequest(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() request: Request & { developerId?: number },
+  ) {
+    return this.leadsService.createFeedbackRequest(id, request.developerId);
   }
 
   @Post('feedback/:token')
@@ -98,10 +112,10 @@ export class LeadsController {
   }
 
   @Get('feedback/summary')
-  @UseGuards(AdminApiKeyGuard)
+  @UseGuards(DeveloperAuthGuard)
   @ApiOperation({ summary: 'Get lead feedback summary for dashboard' })
   @ApiResponse({ status: 200, description: 'Feedback summary' })
-  getFeedbackSummary() {
-    return this.leadsService.getFeedbackSummary();
+  getFeedbackSummary(@Req() request: Request & { developerId?: number }) {
+    return this.leadsService.getFeedbackSummary(request.developerId);
   }
 }

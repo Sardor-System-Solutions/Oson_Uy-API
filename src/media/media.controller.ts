@@ -16,7 +16,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { MediaService } from './media.service';
-import { AdminApiKeyGuard } from '../common/guards/admin-api-key.guard';
+import { DeveloperAuthGuard } from '../common/guards/developer-auth.guard';
 
 @ApiTags('media')
 @Controller('upload')
@@ -24,7 +24,7 @@ export class MediaController {
   constructor(private readonly mediaService: MediaService) {}
 
   @Post('image')
-  @UseGuards(AdminApiKeyGuard)
+  @UseGuards(DeveloperAuthGuard)
   @ApiOperation({ summary: 'Upload image to Supabase Storage and return URL' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({

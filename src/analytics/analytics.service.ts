@@ -10,13 +10,20 @@ export interface ProjectLeadAnalytics {
 export class AnalyticsService {
   constructor(private prisma: PrismaService) {}
 
-  async getProjectsAnalytics(): Promise<ProjectLeadAnalytics[]> {
+  async getProjectsAnalytics(developerId?: number): Promise<ProjectLeadAnalytics[]> {
     const groupedLeads = await this.prisma.lead.groupBy({
       by: ['projectId'],
       where: {
         projectId: {
           not: null,
         },
+        ...(developerId
+          ? {
+              project: {
+                developerId,
+              },
+            }
+          : {}),
       },
       _count: {
         id: true,

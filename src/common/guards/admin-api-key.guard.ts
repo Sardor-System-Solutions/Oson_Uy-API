@@ -11,13 +11,13 @@ export class AdminApiKeyGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const requiredKey = process.env.ADMIN_API_KEY;
     if (!requiredKey) {
-      return true;
+      throw new UnauthorizedException('Admin API key is not configured');
     }
 
     const request = context.switchToHttp().getRequest<Request>();
     const providedKey = request.headers['x-admin-key'];
 
-    if (providedKey === requiredKey) {
+    if (typeof providedKey === 'string' && providedKey === requiredKey) {
       return true;
     }
 

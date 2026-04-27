@@ -56,4 +56,21 @@ export class ApartmentsService {
       },
     });
   }
+
+  async belongsToDeveloper(id: number, developerId: number) {
+    const apartment = await this.prisma.apartment.findUnique({
+      where: { id },
+      include: {
+        project: true,
+      },
+    });
+    if (!apartment) return false;
+    const member = await this.prisma.projectMember.findFirst({
+      where: {
+        projectId: apartment.projectId,
+        developerId,
+      },
+    });
+    return Boolean(member);
+  }
 }

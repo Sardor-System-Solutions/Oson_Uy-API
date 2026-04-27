@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
-import { AnalyticsService } from './analytics.service';
-import { AnalyticsController } from './analytics.controller';
+import { BillingController } from './billing.controller';
+import { BillingService } from './billing.service';
 import { PrismaService } from '../prisma.service';
 import { AuthModule } from '../auth/auth.module';
 import { DeveloperAuthGuard } from '../common/guards/developer-auth.guard';
 
 @Module({
   imports: [AuthModule],
-  controllers: [AnalyticsController],
-  providers: [AnalyticsService, PrismaService, DeveloperAuthGuard],
+  controllers: [BillingController],
+  providers: [BillingService, PrismaService, DeveloperAuthGuard],
 })
-export class AnalyticsModule {}
+export class BillingModule {}

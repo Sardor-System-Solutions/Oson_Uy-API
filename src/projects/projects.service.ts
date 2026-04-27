@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, SubscriptionPlan, SubscriptionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { FilterProjectDto } from './dto/filter-project.dto';
@@ -11,7 +11,8 @@ export class ProjectsService {
 
   async create(createProjectDto: CreateProjectDto) {
     const { imageUrls, ...projectData } = createProjectDto;
-    return this.prisma.project.create({
+    this.ensureImageQuota(imageUrls, SubscriptionPlan.START);
+    const project = await this.prisma.project.create({
       data: {
         ...projectData,
         media: imageUrls?.length
@@ -27,9 +28,32 @@ export class ProjectsService {
         developer: true,
         apartments: true,
         media: true,
-        reviews: true,
       },
     });
+    await this.prisma.projectSubscription.create({
+      data: {
+        projectId: project.id,
+        plan: SubscriptionPlan.START,
+        status: SubscriptionStatus.TRIAL,
+        trialStartsAt: new Date(),
+        trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    });
+    await this.prisma.projectMember.upsert({
+      where: {
+        projectId_developerId: {
+          projectId: project.id,
+          developerId: project.developerId,
+        },
+      },
+      update: {},
+      create: {
+        projectId: project.id,
+        developerId: project.developerId,
+        role: 'OWNER',
+      },
+    });
+    return project;
   }
 
   async findAll(filters?: FilterProjectDto) {
@@ -53,16 +77,18 @@ export class ProjectsService {
         media: {
           orderBy: { sortOrder: 'asc' },
         },
-        reviews: {
-          orderBy: { createdAt: 'desc' },
-          take: 5,
-        },
         apartments: {
           where: apartmentFilter,
           include: {
             leads: true,
           },
         },
+        leads: {
+          include: {
+            feedback: true,
+          },
+        },
+        subscription: true,
       },
     });
 
@@ -80,17 +106,40 @@ export class ProjectsService {
     });
 
     return filteredByPerM2.map((project) => {
-      const reviewsCount = project.reviews.length;
+      const feedbacks = project.leads
+        .map((lead) => lead.feedback)
+        .filter((feedback) => Boolean(feedback?.rating));
+      const reviewsCount = feedbacks.length;
       const avgRating = reviewsCount
         ? Number(
             (
-              project.reviews.reduce((sum, review) => sum + review.rating, 0) /
+              feedbacks.reduce((sum, review) => sum + (review.rating ?? 0), 0) /
               reviewsCount
             ).toFixed(1),
           )
         : null;
+      const reviews = feedbacks
+        .slice(0, 5)
+        .map((feedback, index) => ({
+          id: index + 1,
+          rating: feedback.rating ?? 0,
+          comment: feedback.comment,
+        }));
       return {
         ...project,
+        isPopular:
+          project.subscription?.plan === SubscriptionPlan.PREMIUM ||
+          project.subscription?.plan === SubscriptionPlan.ULTIMATE,
+        badgeVerified:
+          project.subscription?.plan === SubscriptionPlan.PRO ||
+          project.subscription?.plan === SubscriptionPlan.PREMIUM ||
+          project.subscription?.plan === SubscriptionPlan.ULTIMATE,
+        badgeTrusted: project.subscription?.plan === SubscriptionPlan.ULTIMATE,
+        topInCatalog:
+          project.subscription?.plan === SubscriptionPlan.PREMIUM ||
+          project.subscription?.plan === SubscriptionPlan.ULTIMATE,
+        topInHome: project.subscription?.plan === SubscriptionPlan.ULTIMATE,
+        reviews,
         reviewsCount,
         avgRating,
       };
@@ -110,9 +159,12 @@ export class ProjectsService {
         media: {
           orderBy: { sortOrder: 'asc' },
         },
-        reviews: {
-          orderBy: { createdAt: 'desc' },
+        leads: {
+          include: {
+            feedback: true,
+          },
         },
+        subscription: true,
       },
     });
 
@@ -120,18 +172,39 @@ export class ProjectsService {
       throw new NotFoundException(`Project with ID ${id} not found`);
     }
 
-    const reviewsCount = project.reviews.length;
+    const feedbacks = project.leads
+      .map((lead) => lead.feedback)
+      .filter((feedback) => Boolean(feedback?.rating));
+    const reviewsCount = feedbacks.length;
     const avgRating = reviewsCount
       ? Number(
           (
-            project.reviews.reduce((sum, review) => sum + review.rating, 0) /
+            feedbacks.reduce((sum, review) => sum + (review.rating ?? 0), 0) /
             reviewsCount
           ).toFixed(1),
         )
       : null;
+    const reviews = feedbacks.slice(0, 5).map((feedback, index) => ({
+      id: index + 1,
+      rating: feedback.rating ?? 0,
+      comment: feedback.comment,
+    }));
 
     return {
       ...project,
+      isPopular:
+        project.subscription?.plan === SubscriptionPlan.PREMIUM ||
+        project.subscription?.plan === SubscriptionPlan.ULTIMATE,
+      badgeVerified:
+        project.subscription?.plan === SubscriptionPlan.PRO ||
+        project.subscription?.plan === SubscriptionPlan.PREMIUM ||
+        project.subscription?.plan === SubscriptionPlan.ULTIMATE,
+      badgeTrusted: project.subscription?.plan === SubscriptionPlan.ULTIMATE,
+      topInCatalog:
+        project.subscription?.plan === SubscriptionPlan.PREMIUM ||
+        project.subscription?.plan === SubscriptionPlan.ULTIMATE,
+      topInHome: project.subscription?.plan === SubscriptionPlan.ULTIMATE,
+      reviews,
       reviewsCount,
       avgRating,
     };
@@ -142,8 +215,12 @@ export class ProjectsService {
   }
 
   async update(id: number, updateProjectDto: UpdateProjectDto) {
-    await this.findOne(id);
+    const current = await this.findOne(id);
     const { imageUrls, ...projectData } = updateProjectDto;
+    this.ensureImageQuota(
+      imageUrls,
+      current.subscription?.plan ?? SubscriptionPlan.START,
+    );
 
     return this.prisma.project.update({
       where: { id },
@@ -163,18 +240,7 @@ export class ProjectsService {
         developer: true,
         apartments: true,
         media: true,
-        reviews: true,
-      },
-    });
-  }
-
-  async addReview(projectId: number, rating: number, comment?: string) {
-    await this.findOne(projectId);
-    return this.prisma.projectReview.create({
-      data: {
-        projectId,
-        rating,
-        comment,
+        subscription: true,
       },
     });
   }
@@ -196,5 +262,23 @@ export class ProjectsService {
     }
 
     return Object.keys(where).length > 0 ? where : undefined;
+  }
+
+  private ensureImageQuota(
+    imageUrls: string[] | undefined,
+    plan: SubscriptionPlan,
+  ) {
+    if (!imageUrls) return;
+    const limits: Record<SubscriptionPlan, number> = {
+      START: 3,
+      PRO: 5,
+      PREMIUM: 7,
+      ULTIMATE: Number.POSITIVE_INFINITY,
+    };
+    if (imageUrls.length > limits[plan]) {
+      throw new NotFoundException(
+        `Plan ${plan} allows maximum ${limits[plan]} images`,
+      );
+    }
   }
 }

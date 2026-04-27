@@ -21,6 +21,15 @@ export class DevelopersService {
     });
   }
 
+  async findById(id: number) {
+    return this.prisma.developer.findUnique({
+      where: { id },
+      include: {
+        projects: true,
+      },
+    });
+  }
+
   async update(id: number, updateDeveloperDto: UpdateDeveloperDto) {
     return this.prisma.developer.update({
       where: { id },

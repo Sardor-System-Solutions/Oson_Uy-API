@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsArray,
   IsNumber,
+  IsUrl,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -60,7 +61,7 @@ export class CreateProjectDto {
     required: false,
   })
   @IsOptional()
-  @IsString()
+  @IsUrl()
   mapEmbedUrl?: string;
 
   @ApiProperty({

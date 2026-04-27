@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -15,8 +16,16 @@ async function bootstrap() {
     }),
   );
 
-  // Enable CORS for frontend
-  app.enableCors();
+  app.use(helmet());
+
+  const corsOrigins = (process.env.CORS_ORIGINS ?? '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  app.enableCors({
+    origin: corsOrigins.length ? corsOrigins : false,
+    credentials: true,
+  });
 
   // Configure Swagger
   const config = new DocumentBuilder()
@@ -31,6 +40,8 @@ async function bootstrap() {
     .addTag('leads', 'Lead management endpoints')
     .addTag('analytics', 'MVP analytics endpoints')
     .addTag('media', 'Media upload endpoints')
+    .addTag('auth', 'Developer authentication endpoints')
+    .addTag('billing', 'Subscription billing endpoints')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

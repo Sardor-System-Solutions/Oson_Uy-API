@@ -13,10 +13,14 @@ datasource db {
 model Developer {
     id         Int      @id @default(autoincrement())
     name       String
+    email      String?  @unique
+    passwordHash String?
     qrCodeUrl  String?
     createdAt  DateTime @default(now())
 
     projects Project[]
+    sessions DeveloperSession[]
+    memberships ProjectMember[]
 
     @@map("developers")
 }
@@ -31,6 +35,10 @@ model Project {
     mapEmbedUrl  String?
     totalFloors  Int?
     totalUnits   Int?
+    badgeVerified Boolean @default(false)
+    badgeTrusted  Boolean @default(false)
+    topInCatalog  Boolean @default(false)
+    topInHome     Boolean @default(false)
     deliveryDate String
     imageUrl     String  @default("https://via.placeholder.com/800x600?text=Project+Image")
     videoUrl     String?
@@ -41,9 +49,119 @@ model Project {
     leads      Lead[]
     media      ProjectMedia[]
     reviews    ProjectReview[]
+    members    ProjectMember[]
+    subscription ProjectSubscription?
+    billingInvoices BillingInvoice[]
 
     @@index([developerId])
     @@map("projects")
+}
+
+enum ProjectMemberRole {
+    OWNER
+    MANAGER
+}
+
+model ProjectMember {
+    id          Int @id @default(autoincrement())
+    projectId   Int
+    developerId Int
+    role        ProjectMemberRole @default(MANAGER)
+    createdAt   DateTime @default(now())
+
+    project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+    developer Developer @relation(fields: [developerId], references: [id], onDelete: Cascade)
+
+    @@unique([projectId, developerId])
+    @@index([developerId])
+    @@map("project_members")
+}
+
+model DeveloperSession {
+    id          Int      @id @default(autoincrement())
+    developerId Int
+    token       String   @unique
+    expiresAt   DateTime
+    createdAt   DateTime @default(now())
+
+    developer Developer @relation(fields: [developerId], references: [id], onDelete: Cascade)
+
+    @@index([developerId])
+    @@index([token])
+    @@map("developer_sessions")
+}
+
+enum SubscriptionPlan {
+    START
+    PRO
+    PREMIUM
+    ULTIMATE
+}
+
+enum SubscriptionStatus {
+    TRIAL
+    ACTIVE
+    PAST_DUE
+    CANCELED
+    EXPIRED
+}
+
+enum BillingProvider {
+    PAYME
+    CLICK
+}
+
+model ProjectSubscription {
+    id            Int                @id @default(autoincrement())
+    projectId     Int                @unique
+    plan          SubscriptionPlan   @default(START)
+    status        SubscriptionStatus @default(TRIAL)
+    trialStartsAt DateTime?
+    trialEndsAt   DateTime?
+    currentPeriodStart DateTime?
+    currentPeriodEnd   DateTime?
+    provider      BillingProvider?
+    externalRef   String?
+    createdAt     DateTime           @default(now())
+    updatedAt     DateTime           @updatedAt
+
+    project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+    @@index([status])
+    @@index([plan])
+    @@map("project_subscriptions")
+}
+
+model BillingInvoice {
+    id             Int             @id @default(autoincrement())
+    projectId      Int
+    provider       BillingProvider
+    amountUsd      Int
+    status         String          @default("PENDING")
+    externalRef    String?         @unique
+    checkoutUrl    String?
+    metadata       Json?
+    createdAt      DateTime        @default(now())
+    updatedAt      DateTime        @updatedAt
+
+    project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+    @@index([projectId])
+    @@index([provider, status])
+    @@map("billing_invoices")
+}
+
+model BillingWebhookEvent {
+    id          Int      @id @default(autoincrement())
+    provider    BillingProvider
+    externalRef String
+    status      String
+    signature   String?
+    createdAt   DateTime @default(now())
+
+    @@unique([provider, externalRef, status])
+    @@index([externalRef])
+    @@map("billing_webhook_events")
 }
 
 model Apartment {

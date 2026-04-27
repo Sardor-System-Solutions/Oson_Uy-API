@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma.service';
@@ -37,7 +37,7 @@ export class LeadsService {
     return lead;
   }
 
-  async findAll(filters?: FilterLeadDto) {
+  async findAll(filters?: FilterLeadDto, developerId?: number) {
     const where: Prisma.LeadWhereInput = {};
 
     if (filters?.projectId) {
@@ -46,6 +46,10 @@ export class LeadsService {
 
     if (filters?.status) {
       where.status = filters.status;
+    }
+
+    if (developerId) {
+      where.project = { developerId };
     }
 
     return this.prisma.lead.findMany({
@@ -65,8 +69,8 @@ export class LeadsService {
     });
   }
 
-  async findOne(id: number) {
-    return this.prisma.lead.findUnique({
+  async findOne(id: number, developerId?: number) {
+    const lead = await this.prisma.lead.findUnique({
       where: { id },
       include: {
         apartment: {
@@ -78,9 +82,23 @@ export class LeadsService {
         feedback: true,
       },
     });
+    if (!lead) {
+      throw new NotFoundException('Lead not found');
+    }
+    if (
+      developerId &&
+      lead.project &&
+      lead.project.developerId !== developerId
+    ) {
+      throw new ForbiddenException('No access to this lead');
+    }
+    return lead;
   }
 
-  async update(id: number, updateLeadDto: UpdateLeadDto) {
+  async update(id: number, updateLeadDto: UpdateLeadDto, developerId?: number) {
+    if (developerId) {
+      await this.findOne(id, developerId);
+    }
     const lead = await this.prisma.lead.update({
       where: { id },
       data: updateLeadDto,
@@ -107,11 +125,8 @@ export class LeadsService {
     return lead;
   }
 
-  async createFeedbackRequest(leadId: number) {
-    const lead = await this.findOne(leadId);
-    if (!lead) {
-      throw new Error('Lead not found');
-    }
+  async createFeedbackRequest(leadId: number, developerId?: number) {
+    const lead = await this.findOne(leadId, developerId);
 
     const token = randomUUID();
     const feedback = await this.prisma.leadFeedback.upsert({
@@ -153,10 +168,19 @@ export class LeadsService {
     });
   }
 
-  async getFeedbackSummary() {
+  async getFeedbackSummary(developerId?: number) {
     const feedbacks = await this.prisma.leadFeedback.findMany({
       where: {
         submittedAt: { not: null },
+        ...(developerId
+          ? {
+              lead: {
+                project: {
+                  developerId,
+                },
+              },
+            }
+          : {}),
       },
       include: {
         lead: {
