@@ -12,11 +12,11 @@ import { createHmac, randomUUID } from 'crypto';
 import { PrismaService } from '../prisma.service';
 import { ManualPaymentMethod } from './dto/create-checkout.dto';
 
-const PLAN_PRICES_USD: Record<SubscriptionPlan, number> = {
-  START: 149,
-  PRO: 249,
-  PREMIUM: 399,
-  ULTIMATE: 500,
+const PLAN_PRICES_UZS: Record<SubscriptionPlan, number> = {
+  START: 1900000,
+  PRO: 3200000,
+  PREMIUM: 5100000,
+  ULTIMATE: 6400000,
 };
 
 @Injectable()
@@ -46,7 +46,7 @@ export class BillingService {
     }
 
     const externalRef = randomUUID();
-    const amountUsd = PLAN_PRICES_USD[plan];
+    const amountUzs = PLAN_PRICES_UZS[plan];
     const cardNumber = process.env.MANUAL_PAYMENT_CARD ?? '';
     const cardHolder = process.env.MANUAL_PAYMENT_CARD_HOLDER ?? '';
     const cashAddress = process.env.MANUAL_PAYMENT_CASH_ADDRESS ?? '';
@@ -55,11 +55,12 @@ export class BillingService {
       data: {
         projectId,
         provider: BillingProvider.PAYME,
-        amountUsd,
+        amountUsd: amountUzs,
         externalRef,
         checkoutUrl: null,
         metadata: {
           plan,
+          currency: 'UZS',
           paymentMethod,
           note: note?.trim() || null,
           manual: true,
@@ -70,7 +71,7 @@ export class BillingService {
     return {
       invoiceId: invoice.id,
       externalRef,
-      amountUsd,
+      amountUzs,
       status: invoice.status,
       paymentMethod,
       instructions:

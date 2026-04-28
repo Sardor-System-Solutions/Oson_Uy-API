@@ -17,8 +17,8 @@ export class CreateApartmentDto {
   projectId: number;
 
   @ApiProperty({
-    description: 'The price of the apartment in USD',
-    example: 150000,
+    description: 'The price of the apartment in UZS',
+    example: 850000000,
   })
   @IsNotEmpty()
   @IsNumber()
