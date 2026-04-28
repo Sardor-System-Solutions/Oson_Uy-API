@@ -14,8 +14,8 @@ export class FilterApartmentDto {
   projectId?: number;
 
   @ApiProperty({
-    description: 'Minimum price of the apartment',
-    example: 100000,
+    description: 'Minimum price of the apartment (UZS)',
+    example: 500000000,
     required: false,
   })
   @IsOptional()
@@ -24,8 +24,8 @@ export class FilterApartmentDto {
   minPrice?: number;
 
   @ApiProperty({
-    description: 'Maximum price of the apartment',
-    example: 500000,
+    description: 'Maximum price of the apartment (UZS)',
+    example: 2000000000,
     required: false,
   })
   @IsOptional()

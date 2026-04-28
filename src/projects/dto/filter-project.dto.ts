@@ -24,8 +24,8 @@ export class FilterProjectDto {
   maxPrice?: number;
 
   @ApiProperty({
-    description: 'Minimum apartment price per m² in project',
-    example: 800,
+    description: 'Minimum apartment price per m² in project (UZS)',
+    example: 6000000,
     required: false,
   })
   @IsOptional()
@@ -34,8 +34,8 @@ export class FilterProjectDto {
   pricePerM2Min?: number;
 
   @ApiProperty({
-    description: 'Maximum apartment price per m² in project',
-    example: 2000,
+    description: 'Maximum apartment price per m² in project (UZS)',
+    example: 15000000,
     required: false,
   })
   @IsOptional()
