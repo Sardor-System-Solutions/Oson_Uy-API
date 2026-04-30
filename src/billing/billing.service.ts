@@ -10,6 +10,7 @@ import {
 } from '@prisma/client';
 import { createHmac, randomUUID } from 'crypto';
 import { PrismaService } from '../prisma.service';
+import { NotificationService } from '../common/services/notification.service';
 import { ManualPaymentMethod } from './dto/create-checkout.dto';
 
 const PLAN_PRICES_UZS: Record<SubscriptionPlan, number> = {
@@ -21,7 +22,10 @@ const PLAN_PRICES_UZS: Record<SubscriptionPlan, number> = {
 
 @Injectable()
 export class BillingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationService: NotificationService,
+  ) {}
 
   async createCheckout(
     projectId: number,
@@ -67,6 +71,26 @@ export class BillingService {
         },
       },
     });
+
+    // Send notification to developer
+    const developer = await this.prisma.developer.findUnique({
+      where: { id: project.developerId },
+    });
+
+    if (developer) {
+      void this.notificationService.notifyDeveloper({
+        type: 'PAYMENT_REQUEST',
+        developerId: project.developerId,
+        developerName: developer.name,
+        developerEmail: developer.email,
+        projectName: project.name,
+        projectId,
+        plan,
+        amount: amountUzs,
+        requestId: externalRef,
+        message: note,
+      });
+    }
 
     return {
       invoiceId: invoice.id,
@@ -187,5 +211,218 @@ export class BillingService {
     });
 
     return { ok: true };
+  }
+
+  async updateSubscriptionStatus(
+    projectId: number,
+    status: string,
+    developerId?: number,
+  ) {
+    // Validate status
+    const validStatuses = Object.values(SubscriptionStatus);
+    if (!validStatuses.includes(status as SubscriptionStatus)) {
+      throw new BadRequestException(
+        `Invalid subscription status. Valid options: ${validStatuses.join(', ')}`,
+      );
+    }
+
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+    });
+    if (!project) {
+      throw new BadRequestException('Project not found');
+    }
+
+    if (developerId) {
+      const membership = await this.prisma.projectMember.findFirst({
+        where: { projectId, developerId },
+      });
+      if (!membership) {
+        throw new ForbiddenException('No access to this project workspace');
+      }
+    }
+
+    const subscription = await this.prisma.projectSubscription.upsert({
+      where: { projectId },
+      update: { status: status as SubscriptionStatus },
+      create: {
+        projectId,
+        status: status as SubscriptionStatus,
+        plan: SubscriptionPlan.START,
+      },
+      include: { project: true },
+    });
+
+    // Send notification to developer
+    const developer = await this.prisma.developer.findUnique({
+      where: { id: project.developerId },
+    });
+
+    if (developer) {
+      void this.notificationService.notifyDeveloper({
+        type: 'SUBSCRIPTION_STATUS_CHANGE',
+        developerId: project.developerId,
+        developerName: developer.name,
+        developerEmail: developer.email,
+        projectName: project.name,
+        projectId,
+        plan: subscription.plan,
+        status: subscription.status,
+      });
+    }
+
+    return subscription;
+  }
+
+  /** Admin-only: update any project subscription status without membership check */
+  async adminUpdateSubscriptionStatus(
+    projectId: number,
+    status: string,
+  ) {
+    const validStatuses = Object.values(SubscriptionStatus);
+    if (!validStatuses.includes(status as SubscriptionStatus)) {
+      throw new BadRequestException(
+        `Invalid subscription status. Valid options: ${validStatuses.join(', ')}`,
+      );
+    }
+
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+    });
+    if (!project) {
+      throw new BadRequestException('Project not found');
+    }
+
+    const subscription = await this.prisma.projectSubscription.upsert({
+      where: { projectId },
+      update: { status: status as SubscriptionStatus },
+      create: {
+        projectId,
+        status: status as SubscriptionStatus,
+        plan: SubscriptionPlan.START,
+      },
+      include: { project: true },
+    });
+
+    // Notify developer
+    const developer = await this.prisma.developer.findUnique({
+      where: { id: project.developerId },
+    });
+    if (developer) {
+      void this.notificationService.notifyDeveloper({
+        type: 'SUBSCRIPTION_STATUS_CHANGE',
+        developerId: project.developerId,
+        developerName: developer.name,
+        developerEmail: developer.email,
+        projectName: project.name,
+        projectId,
+        plan: subscription.plan,
+        status: subscription.status,
+      });
+    }
+
+    return subscription;
+  }
+
+  /** Admin-only: confirm a pending invoice as paid and activate subscription */
+  async adminConfirmPayment(invoiceId: number) {
+    const invoice = await this.prisma.billingInvoice.findUnique({
+      where: { id: invoiceId },
+    });
+    if (!invoice) {
+      throw new BadRequestException('Invoice not found');
+    }
+    if (invoice.status === 'PAID') {
+      return { ok: true, message: 'Invoice already paid' };
+    }
+
+    const plan = (invoice.metadata as { plan?: SubscriptionPlan })?.plan;
+    if (!plan) {
+      throw new BadRequestException('Invoice has no subscription plan');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.billingInvoice.update({
+        where: { id: invoice.id },
+        data: { status: 'PAID' },
+      });
+
+      await tx.projectSubscription.upsert({
+        where: { projectId: invoice.projectId },
+        update: {
+          plan,
+          status: SubscriptionStatus.ACTIVE,
+          provider: invoice.provider,
+          externalRef: invoice.externalRef,
+          currentPeriodStart: new Date(),
+          currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        },
+        create: {
+          projectId: invoice.projectId,
+          plan,
+          status: SubscriptionStatus.ACTIVE,
+          provider: invoice.provider,
+          externalRef: invoice.externalRef,
+          trialStartsAt: null,
+          trialEndsAt: null,
+          currentPeriodStart: new Date(),
+          currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        },
+      });
+    });
+
+    // Notify developer
+    const project = await this.prisma.project.findUnique({
+      where: { id: invoice.projectId },
+    });
+    if (project) {
+      const developer = await this.prisma.developer.findUnique({
+        where: { id: project.developerId },
+      });
+      if (developer) {
+        void this.notificationService.notifyDeveloper({
+          type: 'SUBSCRIPTION_STATUS_CHANGE',
+          developerId: project.developerId,
+          developerName: developer.name,
+          developerEmail: developer.email,
+          projectName: project.name,
+          projectId: project.id,
+          plan,
+          status: 'ACTIVE',
+        });
+      }
+    }
+
+    return {
+      ok: true,
+      message: `Invoice #${invoiceId} confirmed. Subscription activated with plan ${plan}.`,
+    };
+  }
+
+  /** Admin-only: list all invoices for review */
+  async adminListInvoices() {
+    return this.prisma.billingInvoice.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        project: {
+          include: {
+            developer: true,
+            subscription: true,
+          },
+        },
+      },
+    });
+  }
+
+  /** Admin-only: list all subscriptions */
+  async adminListSubscriptions() {
+    return this.prisma.projectSubscription.findMany({
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        project: {
+          include: { developer: true },
+        },
+      },
+    });
   }
 }
