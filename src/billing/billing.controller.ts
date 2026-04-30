@@ -45,7 +45,7 @@ export class BillingController {
       example: {
         invoiceId: 1,
         externalRef: '550e8400-e29b-41d4-a716-446655440000',
-        amountUzs: 3200000,
+        amountUzs: 3000000,
         status: 'PENDING',
         paymentMethod: 'CARD_TRANSFER',
         instructions: {

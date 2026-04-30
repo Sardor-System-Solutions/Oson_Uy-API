@@ -14,10 +14,10 @@ import { NotificationService } from '../common/services/notification.service';
 import { ManualPaymentMethod } from './dto/create-checkout.dto';
 
 const PLAN_PRICES_UZS: Record<SubscriptionPlan, number> = {
-  START: 1900000,
-  PRO: 3200000,
-  PREMIUM: 5100000,
-  ULTIMATE: 6400000,
+  START: 1000000,
+  PRO: 3000000,
+  PREMIUM: 4000000,
+  ULTIMATE: 5000000,
 };
 
 @Injectable()
