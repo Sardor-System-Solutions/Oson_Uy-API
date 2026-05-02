@@ -21,6 +21,19 @@ export class TelegramBotService {
   }
 
   async sendPlainText(chatId: string, text: string): Promise<void> {
+    await this.sendMessage(chatId, text);
+  }
+
+  /** HTML: https://core.telegram.org/bots/api#html-style */
+  async sendHtml(chatId: string, html: string): Promise<void> {
+    await this.sendMessage(chatId, html, 'HTML');
+  }
+
+  private async sendMessage(
+    chatId: string,
+    text: string,
+    parseMode?: 'HTML',
+  ): Promise<void> {
     if (!this.token) {
       this.logger.warn('TELEGRAM_BOT_TOKEN not set; skip send');
       return;
@@ -30,13 +43,17 @@ export class TelegramBotService {
     }
     try {
       const url = `https://api.telegram.org/bot${this.token}/sendMessage`;
+      const payload: Record<string, string | number> = {
+        chat_id: chatId,
+        text,
+      };
+      if (parseMode) {
+        payload.parse_mode = parseMode;
+      }
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text,
-        }),
+        body: JSON.stringify(payload),
       });
       if (!response.ok) {
         this.logger.warn(

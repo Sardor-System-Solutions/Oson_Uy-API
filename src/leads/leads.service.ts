@@ -12,6 +12,17 @@ import { CreateLeadDto } from './dto/create-lead.dto';
 import { UpdateLeadDto } from './dto/update-lead.dto';
 import { FilterLeadDto } from './dto/filter-lead.dto';
 
+function escapeTelegramHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function escapeHref(url: string): string {
+  return url.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+}
+
 @Injectable()
 export class LeadsService {
   constructor(
@@ -53,19 +64,34 @@ export class LeadsService {
         process.env.FRONTEND_URL ??
         'http://localhost:3000';
       const leadsUrl = `${dashboardBase.replace(/\/$/, '')}/dashboard/leads`;
-      const message = [
-        'Новая заявка',
+      const when = new Date(lead.createdAt).toLocaleString('ru-RU', {
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      const apartmentHint =
+        lead.apartmentId != null
+          ? `\n🚪 <b>Квартира (id):</b> <code>${lead.apartmentId}</code>`
+          : '';
+      const html = [
+        '🎯 <b>Новая заявка</b> · <i>OsonUy</i>',
         '',
-        `Имя: ${lead.name}`,
-        `Телефон: ${lead.phone}`,
-        `Объект: ${projectName}`,
+        '👤 <b>Имя:</b> ' + escapeTelegramHtml(lead.name),
+        '📞 <b>Телефон:</b> <code>' +
+          escapeTelegramHtml(lead.phone) +
+          '</code>',
+        '🏗 <b>Объект:</b> ' + escapeTelegramHtml(projectName),
+        '🆔 <b>№ заявки:</b> <code>' + String(lead.id) + '</code>',
+        '🕐 <b>Когда:</b> ' + escapeTelegramHtml(when),
+        apartmentHint,
         '',
-        `Открыть заявки и статус: ${leadsUrl}`,
-      ].join('\n');
-      await this.telegramBot.sendPlainText(
-        developer.telegramChatId,
-        message,
-      );
+        '✅ Статус и ссылка на отзыв — в кабинете.',
+        '👉 <a href="' + escapeHref(leadsUrl) + '">Открыть раздел «Заявки»</a>',
+      ]
+        .filter(Boolean)
+        .join('\n');
+      await this.telegramBot.sendHtml(developer.telegramChatId, html);
     }
 
     return lead;
