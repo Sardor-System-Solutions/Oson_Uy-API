@@ -36,6 +36,7 @@ export class LeadsService {
     if (createLeadDto.floorId != null) {
       const floor = await this.prisma.projectFloor.findUnique({
         where: { id: createLeadDto.floorId },
+        include: { areaOptions: true },
       });
       if (!floor) {
         throw new BadRequestException('Invalid floorId');
@@ -52,17 +53,12 @@ export class LeadsService {
         name: createLeadDto.name,
         phone: createLeadDto.phone,
         projectId: createLeadDto.projectId,
-        apartmentId: createLeadDto.apartmentId,
         floorId: createLeadDto.floorId,
       },
       include: {
         floor: {
           include: {
-            project: { include: { developer: true } },
-          },
-        },
-        apartment: {
-          include: {
+            areaOptions: { orderBy: { sortOrder: 'asc' } },
             project: { include: { developer: true } },
           },
         },
@@ -70,25 +66,21 @@ export class LeadsService {
       },
     });
 
-    // Send notification about new lead
+    const projectName =
+      lead.project?.name ?? lead.floor?.project?.name ?? 'Unknown project';
+    const interestHint =
+      lead.floorId != null && lead.floor
+        ? `floor ${lead.floor.floor} (id ${lead.floorId})`
+        : 'general inquiry';
+
     await this.notificationsService.notifyNewLead(
       lead.name,
-      lead.apartmentId,
-      lead.project?.name ??
-        lead.apartment?.project?.name ??
-        lead.floor?.project?.name ??
-        'Unknown project',
+      interestHint,
+      projectName,
     );
 
-    const projectName =
-      lead.project?.name ??
-      lead.apartment?.project?.name ??
-      lead.floor?.project?.name ??
-      '—';
     const developer =
-      lead.project?.developer ??
-      lead.apartment?.project?.developer ??
-      lead.floor?.project?.developer;
+      lead.project?.developer ?? lead.floor?.project?.developer;
 
     if (developer?.telegramChatId) {
       const dashboardBase =
@@ -102,13 +94,11 @@ export class LeadsService {
         hour: '2-digit',
         minute: '2-digit',
       });
-      const apartmentHint =
-        lead.apartmentId != null
-          ? `\n🚪 <b>Квартира (id):</b> <code>${lead.apartmentId}</code>`
-          : '';
+      const areas =
+        lead.floor?.areaOptions?.map((o) => `${o.areaSqm}`).join(', ') || '—';
       const floorHint =
         lead.floorId != null && lead.floor
-          ? `\n🏢 <b>Этаж:</b> ${lead.floor.floor} · <b>от ${escapeTelegramHtml(String(Math.round(lead.floor.pricePerM2)))} сум/м²</b> · <b>${lead.floor.areaSqm} м²</b>`
+          ? `\n🏢 <b>Этаж:</b> ${lead.floor.floor} · <b>${escapeTelegramHtml(String(Math.round(lead.floor.pricePerM2)))} сум/м²</b> · <b>м² варианты:</b> ${escapeTelegramHtml(areas)}`
           : '';
       const html = [
         '🎯 <b>Новая заявка</b> · <i>OsonUy</i>',
@@ -120,7 +110,6 @@ export class LeadsService {
         '🏗 <b>Объект:</b> ' + escapeTelegramHtml(projectName),
         '🆔 <b>№ заявки:</b> <code>' + String(lead.id) + '</code>',
         '🕐 <b>Когда:</b> ' + escapeTelegramHtml(when),
-        apartmentHint,
         floorHint,
         '',
         '✅ Статус и ссылка на отзыв — в кабинете.',
@@ -152,11 +141,8 @@ export class LeadsService {
     return this.prisma.lead.findMany({
       where: Object.keys(where).length > 0 ? where : undefined,
       include: {
-        floor: { include: { project: true } },
-        apartment: {
-          include: {
-            project: true,
-          },
+        floor: {
+          include: { project: true, areaOptions: { orderBy: { sortOrder: 'asc' } } },
         },
         project: true,
         feedback: true,
@@ -171,11 +157,8 @@ export class LeadsService {
     const lead = await this.prisma.lead.findUnique({
       where: { id },
       include: {
-        floor: { include: { project: true } },
-        apartment: {
-          include: {
-            project: true,
-          },
+        floor: {
+          include: { project: true, areaOptions: { orderBy: { sortOrder: 'asc' } } },
         },
         project: true,
         feedback: true,
@@ -186,9 +169,7 @@ export class LeadsService {
     }
     if (developerId) {
       const devId =
-        lead.project?.developerId ??
-        lead.apartment?.project?.developerId ??
-        lead.floor?.project?.developerId;
+        lead.project?.developerId ?? lead.floor?.project?.developerId;
       if (devId !== developerId) {
         throw new ForbiddenException('No access to this lead');
       }
@@ -204,18 +185,14 @@ export class LeadsService {
       where: { id },
       data: updateLeadDto,
       include: {
-        floor: { include: { project: true } },
-        apartment: {
-          include: {
-            project: true,
-          },
+        floor: {
+          include: { project: true, areaOptions: { orderBy: { sortOrder: 'asc' } } },
         },
         project: true,
         feedback: true,
       },
     });
 
-    // Send notification about status change
     if (updateLeadDto.status) {
       await this.notificationsService.notifyLeadStatusChange(
         lead.name,

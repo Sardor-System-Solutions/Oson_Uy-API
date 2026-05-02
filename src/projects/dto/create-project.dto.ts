@@ -84,7 +84,7 @@ export class CreateProjectDto {
   totalFloors?: number;
 
   @ApiProperty({
-    description: 'Total number of apartments/units in the project',
+    description: 'Total number of units in the project (optional)',
     example: 220,
     required: false,
   })

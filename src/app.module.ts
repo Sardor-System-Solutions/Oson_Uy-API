@@ -6,7 +6,6 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 import { PrismaService } from './prisma.service';
 import { DevelopersModule } from './developers/developers.module';
 import { ProjectsModule } from './projects/projects.module';
-import { ApartmentsModule } from './apartments/apartments.module';
 import { LeadsModule } from './leads/leads.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { MediaModule } from './media/media.module';
@@ -29,7 +28,6 @@ import { ProjectMemberGuard } from './common/guards/project-member.guard';
     }),
     DevelopersModule,
     ProjectsModule,
-    ApartmentsModule,
     LeadsModule,
     AnalyticsModule,
     MediaModule,

@@ -49,7 +49,7 @@ export class LeadsController {
   })
   @ApiResponse({
     status: 200,
-    description: 'List of leads with apartment and project details',
+    description: 'List of leads with project and floor details',
   })
   findAll(
     @Query() filters: FilterLeadDto,

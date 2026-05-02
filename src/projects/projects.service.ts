@@ -9,8 +9,9 @@ type ProjectWithRelations = Prisma.ProjectGetPayload<{
   include: {
     developer: true;
     media: true;
-    apartments: { include: { leads: true } };
-    floors: true;
+    floors: {
+      include: { areaOptions: true; layouts: true };
+    };
     leads: { include: { feedback: true } };
     subscription: true;
   };
@@ -19,6 +20,11 @@ type ProjectWithRelations = Prisma.ProjectGetPayload<{
 @Injectable()
 export class ProjectsService {
   constructor(private prisma: PrismaService) {}
+
+  private static readonly floorInclude = {
+    areaOptions: { orderBy: { sortOrder: 'asc' as const } },
+    layouts: { orderBy: { sortOrder: 'asc' as const } },
+  };
 
   async create(createProjectDto: CreateProjectDto) {
     const { imageUrls, ...projectData } = createProjectDto;
@@ -37,8 +43,7 @@ export class ProjectsService {
       },
       include: {
         developer: true,
-        apartments: true,
-        floors: true,
+        floors: { include: ProjectsService.floorInclude },
         media: true,
       },
     });
@@ -82,12 +87,9 @@ export class ProjectsService {
         media: {
           orderBy: { sortOrder: 'asc' },
         },
-        apartments: {
-          include: {
-            leads: true,
-          },
+        floors: {
+          include: ProjectsService.floorInclude,
         },
-        floors: true,
         leads: {
           include: {
             feedback: true,
@@ -109,12 +111,9 @@ export class ProjectsService {
       where: { id },
       include: {
         developer: true,
-        apartments: {
-          include: {
-            leads: true,
-          },
+        floors: {
+          include: ProjectsService.floorInclude,
         },
-        floors: true,
         media: {
           orderBy: { sortOrder: 'asc' },
         },
@@ -162,8 +161,7 @@ export class ProjectsService {
       },
       include: {
         developer: true,
-        apartments: true,
-        floors: true,
+        floors: { include: ProjectsService.floorInclude },
         media: true,
         subscription: true,
       },
@@ -177,72 +175,19 @@ export class ProjectsService {
     if (!filters) return true;
 
     const hasPrice =
-      filters.minPrice != null ||
-      filters.maxPrice != null ||
-      filters.pricePerM2Min != null ||
-      filters.pricePerM2Max != null;
-
-    const aptMatch = project.apartments.some((a) =>
-      this.apartmentMatchesFilters(a, filters),
-    );
-    const floorMatch = project.floors.some((f) =>
-      this.floorMatchesFilters(f, filters),
-    );
-
-    if (filters.rooms != null) {
-      return aptMatch;
-    }
+      filters.pricePerM2Min != null || filters.pricePerM2Max != null;
 
     if (!hasPrice) {
       return true;
     }
 
-    return aptMatch || floorMatch;
-  }
-
-  private apartmentMatchesFilters(
-    apartment: ProjectWithRelations['apartments'][0],
-    filters: FilterProjectDto,
-  ): boolean {
-    if (filters.rooms != null && apartment.rooms !== filters.rooms) {
-      return false;
-    }
-    if (filters.minPrice != null && apartment.price < filters.minPrice) {
-      return false;
-    }
-    if (filters.maxPrice != null && apartment.price > filters.maxPrice) {
-      return false;
-    }
-    if (filters.pricePerM2Min != null || filters.pricePerM2Max != null) {
-      if (!apartment.area) return false;
-      const perM2 = apartment.price / apartment.area;
-      if (
-        filters.pricePerM2Min != null &&
-        perM2 < filters.pricePerM2Min
-      ) {
-        return false;
-      }
-      if (
-        filters.pricePerM2Max != null &&
-        perM2 > filters.pricePerM2Max
-      ) {
-        return false;
-      }
-    }
-    return true;
+    return project.floors.some((f) => this.floorMatchesFilters(f, filters));
   }
 
   private floorMatchesFilters(
     floor: ProjectWithRelations['floors'][0],
     filters: FilterProjectDto,
   ): boolean {
-    const total = floor.pricePerM2 * floor.areaSqm;
-    if (filters.minPrice != null && total < filters.minPrice) {
-      return false;
-    }
-    if (filters.maxPrice != null && total > filters.maxPrice) {
-      return false;
-    }
     if (
       filters.pricePerM2Min != null &&
       floor.pricePerM2 < filters.pricePerM2Min
@@ -255,6 +200,7 @@ export class ProjectsService {
     ) {
       return false;
     }
+
     return true;
   }
 

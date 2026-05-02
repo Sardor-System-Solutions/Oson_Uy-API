@@ -53,24 +53,6 @@ export class ProjectsController {
   @Get()
   @ApiOperation({ summary: 'Get all projects with optional filtering' })
   @ApiQuery({
-    name: 'minPrice',
-    required: false,
-    description: 'Minimum apartment price in project',
-    type: Number,
-  })
-  @ApiQuery({
-    name: 'maxPrice',
-    required: false,
-    description: 'Maximum apartment price in project',
-    type: Number,
-  })
-  @ApiQuery({
-    name: 'rooms',
-    required: false,
-    description: 'Exact number of rooms in apartments',
-    type: Number,
-  })
-  @ApiQuery({
     name: 'location',
     required: false,
     description: 'Project location/city',
@@ -79,18 +61,18 @@ export class ProjectsController {
   @ApiQuery({
     name: 'pricePerM2Min',
     required: false,
-    description: 'Minimum apartment price per m² in project',
+    description: 'Minimum price per m² in project (UZS)',
     type: Number,
   })
   @ApiQuery({
     name: 'pricePerM2Max',
     required: false,
-    description: 'Maximum apartment price per m² in project',
+    description: 'Maximum price per m² in project (UZS)',
     type: Number,
   })
   @ApiResponse({
     status: 200,
-    description: 'List of all projects with developer and apartments',
+    description: 'List of projects with developer and floor pricing',
   })
   findAll(@Query() filters: FilterProjectDto) {
     return this.projectsService.findAll(filters);
@@ -101,7 +83,7 @@ export class ProjectsController {
   @ApiParam({ name: 'id', description: 'Project ID', type: Number })
   @ApiResponse({
     status: 200,
-    description: 'Project details with developer and apartments',
+    description: 'Project details with developer and floors',
   })
   @ApiResponse({ status: 404, description: 'Project not found' })
   findOne(@Param('id', ParseIntPipe) id: number) {
@@ -109,11 +91,11 @@ export class ProjectsController {
   }
 
   @Get(':id/full')
-  @ApiOperation({ summary: 'Get full project details with apartments' })
+  @ApiOperation({ summary: 'Get full project details with floors and media' })
   @ApiParam({ name: 'id', description: 'Project ID', type: Number })
   @ApiResponse({
     status: 200,
-    description: 'Project full details with apartments',
+    description: 'Project full details with floors, layouts, and area options',
   })
   @ApiResponse({ status: 404, description: 'Project not found' })
   findFull(@Param('id', ParseIntPipe) id: number) {

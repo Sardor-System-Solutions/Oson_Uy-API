@@ -27,14 +27,14 @@ export class NotificationsService {
 
   async notifyNewLead(
     leadName: string,
-    apartmentId: number | null,
+    interestHint: string | null,
     projectName: string,
   ): Promise<void> {
-    const apartmentText =
-      apartmentId === null
-        ? 'without a selected apartment'
-        : `in apartment #${apartmentId}`;
-    const message = `New lead: ${leadName} is interested ${apartmentText} in project "${projectName}"`;
+    const detail =
+      interestHint == null || interestHint === ''
+        ? 'general inquiry'
+        : interestHint;
+    const message = `New lead: ${leadName} — ${detail} — project "${projectName}"`;
     await this.provider.send(message);
   }
 

@@ -31,12 +31,11 @@ async function bootstrap() {
   const config = new DocumentBuilder()
     .setTitle('Real Estate Platform API')
     .setDescription(
-      'API for managing real estate developers, projects, apartments, and leads',
+      'API for managing real estate developers, projects, floors, and leads',
     )
     .setVersion('1.0')
     .addTag('developers', 'Developer management endpoints')
     .addTag('projects', 'Project management endpoints')
-    .addTag('apartments', 'Apartment management endpoints')
     .addTag('leads', 'Lead management endpoints')
     .addTag('analytics', 'MVP analytics endpoints')
     .addTag('media', 'Media upload endpoints')
