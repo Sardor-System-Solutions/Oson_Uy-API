@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -32,9 +33,34 @@ export class LeadsService {
   ) {}
 
   async create(createLeadDto: CreateLeadDto) {
+    if (createLeadDto.floorId != null) {
+      const floor = await this.prisma.projectFloor.findUnique({
+        where: { id: createLeadDto.floorId },
+      });
+      if (!floor) {
+        throw new BadRequestException('Invalid floorId');
+      }
+      if (floor.projectId !== createLeadDto.projectId) {
+        throw new BadRequestException(
+          'floorId does not belong to the given projectId',
+        );
+      }
+    }
+
     const lead = await this.prisma.lead.create({
-      data: createLeadDto,
+      data: {
+        name: createLeadDto.name,
+        phone: createLeadDto.phone,
+        projectId: createLeadDto.projectId,
+        apartmentId: createLeadDto.apartmentId,
+        floorId: createLeadDto.floorId,
+      },
       include: {
+        floor: {
+          include: {
+            project: { include: { developer: true } },
+          },
+        },
         apartment: {
           include: {
             project: { include: { developer: true } },
@@ -50,13 +76,19 @@ export class LeadsService {
       lead.apartmentId,
       lead.project?.name ??
         lead.apartment?.project?.name ??
+        lead.floor?.project?.name ??
         'Unknown project',
     );
 
     const projectName =
-      lead.project?.name ?? lead.apartment?.project?.name ?? '—';
+      lead.project?.name ??
+      lead.apartment?.project?.name ??
+      lead.floor?.project?.name ??
+      '—';
     const developer =
-      lead.project?.developer ?? lead.apartment?.project?.developer;
+      lead.project?.developer ??
+      lead.apartment?.project?.developer ??
+      lead.floor?.project?.developer;
 
     if (developer?.telegramChatId) {
       const dashboardBase =
@@ -74,6 +106,10 @@ export class LeadsService {
         lead.apartmentId != null
           ? `\n🚪 <b>Квартира (id):</b> <code>${lead.apartmentId}</code>`
           : '';
+      const floorHint =
+        lead.floorId != null && lead.floor
+          ? `\n🏢 <b>Этаж:</b> ${lead.floor.floor} · <b>от ${escapeTelegramHtml(String(Math.round(lead.floor.pricePerM2)))} сум/м²</b> · <b>${lead.floor.areaSqm} м²</b>`
+          : '';
       const html = [
         '🎯 <b>Новая заявка</b> · <i>OsonUy</i>',
         '',
@@ -85,6 +121,7 @@ export class LeadsService {
         '🆔 <b>№ заявки:</b> <code>' + String(lead.id) + '</code>',
         '🕐 <b>Когда:</b> ' + escapeTelegramHtml(when),
         apartmentHint,
+        floorHint,
         '',
         '✅ Статус и ссылка на отзыв — в кабинете.',
         '👉 <a href="' + escapeHref(leadsUrl) + '">Открыть раздел «Заявки»</a>',
@@ -115,6 +152,7 @@ export class LeadsService {
     return this.prisma.lead.findMany({
       where: Object.keys(where).length > 0 ? where : undefined,
       include: {
+        floor: { include: { project: true } },
         apartment: {
           include: {
             project: true,
@@ -133,6 +171,7 @@ export class LeadsService {
     const lead = await this.prisma.lead.findUnique({
       where: { id },
       include: {
+        floor: { include: { project: true } },
         apartment: {
           include: {
             project: true,
@@ -145,12 +184,14 @@ export class LeadsService {
     if (!lead) {
       throw new NotFoundException('Lead not found');
     }
-    if (
-      developerId &&
-      lead.project &&
-      lead.project.developerId !== developerId
-    ) {
-      throw new ForbiddenException('No access to this lead');
+    if (developerId) {
+      const devId =
+        lead.project?.developerId ??
+        lead.apartment?.project?.developerId ??
+        lead.floor?.project?.developerId;
+      if (devId !== developerId) {
+        throw new ForbiddenException('No access to this lead');
+      }
     }
     return lead;
   }
@@ -163,6 +204,7 @@ export class LeadsService {
       where: { id },
       data: updateLeadDto,
       include: {
+        floor: { include: { project: true } },
         apartment: {
           include: {
             project: true,

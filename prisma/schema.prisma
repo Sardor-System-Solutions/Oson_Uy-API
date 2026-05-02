@@ -50,6 +50,7 @@ model Project {
 
     developer  Developer   @relation(fields: [developerId], references: [id], onDelete: Cascade)
     apartments Apartment[]
+    floors     ProjectFloor[]
     leads      Lead[]
     media      ProjectMedia[]
     reviews    ProjectReview[]
@@ -184,6 +185,26 @@ model Apartment {
     @@map("apartments")
 }
 
+model ProjectFloor {
+    id              Int      @id @default(autoincrement())
+    projectId       Int
+    floor           Int
+    pricePerM2      Float    @map("price_per_m2")
+    areaSqm         Float    @map("area_sqm")
+    sampleImageUrl  String?  @map("sample_image_url")
+    title           String?
+    sortOrder       Int      @default(0) @map("sort_order")
+    createdAt       DateTime @default(now()) @map("created_at")
+    updatedAt       DateTime @updatedAt @map("updated_at")
+
+    project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+    leads   Lead[]
+
+    @@unique([projectId, floor])
+    @@index([projectId])
+    @@map("project_floors")
+}
+
 enum LeadStatus {
     NEW
     CONTACTED
@@ -194,17 +215,20 @@ model Lead {
     name        String
     phone       String
     apartmentId Int?
+    floorId     Int?       @map("floor_id")
     projectId   Int?
     status      LeadStatus @default(NEW)
     createdAt   DateTime   @default(now())
 
-    apartment Apartment? @relation(fields: [apartmentId], references: [id], onDelete: SetNull)
-    project   Project?   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+    apartment Apartment?    @relation(fields: [apartmentId], references: [id], onDelete: SetNull)
+    floor     ProjectFloor? @relation(fields: [floorId], references: [id], onDelete: SetNull)
+    project   Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
     feedback  LeadFeedback?
 
     @@index([projectId])
     @@index([status])
     @@index([apartmentId])
+    @@index([floorId])
     @@map("leads")
 }
 
