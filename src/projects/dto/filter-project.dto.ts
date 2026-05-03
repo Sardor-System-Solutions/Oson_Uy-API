@@ -1,5 +1,5 @@
-import { IsOptional, IsNumber, IsString } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsOptional, IsNumber, IsString, IsBoolean } from 'class-validator';
+import { Type, Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class FilterProjectDto {
@@ -31,4 +31,17 @@ export class FilterProjectDto {
   @IsOptional()
   @IsString()
   location?: string;
+
+  @ApiProperty({
+    description: 'Filter by installment availability',
+    required: false,
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === true || value === 'true') return true;
+    if (value === false || value === 'false') return false;
+    return undefined;
+  })
+  @IsBoolean()
+  hasInstallment?: boolean;
 }

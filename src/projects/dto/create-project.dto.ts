@@ -6,6 +6,7 @@ import {
   IsArray,
   IsNumber,
   IsUrl,
+  IsBoolean,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -54,6 +55,87 @@ export class CreateProjectDto {
   @IsArray()
   @IsString({ each: true })
   advantages?: string[];
+
+  @ApiProperty({
+    description: 'Building materials (e.g. monolith, brick)',
+    required: false,
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  materials?: string[];
+
+  @ApiProperty({ description: 'Installment available', required: false })
+  @IsOptional()
+  @IsBoolean()
+  hasInstallment?: boolean;
+
+  @ApiProperty({ description: 'Number of buildings', required: false })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  buildingCount?: number;
+
+  @ApiProperty({ description: 'Number of blocks/corps', required: false })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  corpusCount?: number;
+
+  @ApiProperty({ description: 'Ceiling height in meters', required: false })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  ceilingHeightM?: number;
+
+  @ApiProperty({ description: 'Surface parking available', required: false })
+  @IsOptional()
+  @IsBoolean()
+  hasSurfaceParking?: boolean;
+
+  @ApiProperty({ description: 'Underground parking available', required: false })
+  @IsOptional()
+  @IsBoolean()
+  hasUndergroundParking?: boolean;
+
+  @ApiProperty({ description: 'Surface parking spaces count', required: false })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  surfaceParkingSpaces?: number;
+
+  @ApiProperty({
+    description: 'Underground parking spaces count',
+    required: false,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  undergroundParkingSpaces?: number;
+
+  @ApiProperty({ description: 'Number of elevators', required: false })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  elevatorsCount?: number;
+
+  @ApiProperty({
+    description: 'Latitude for nearby sorting (optional)',
+    required: false,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  latitude?: number;
+
+  @ApiProperty({
+    description: 'Longitude for nearby sorting (optional)',
+    required: false,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  longitude?: number;
 
   @ApiProperty({
     description: 'Map embed URL (Google/2GIS/Yandex embed link)',

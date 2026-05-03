@@ -73,12 +73,23 @@ export class DevelopersService {
   }
 
   async update(id: number, updateDeveloperDto: UpdateDeveloperDto) {
-    return this.prisma.developer.update({
+    const updated = await this.prisma.developer.update({
       where: { id },
       data: updateDeveloperDto,
       include: {
         projects: true,
       },
     });
+    const {
+      passwordHash: _p,
+      telegramLinkToken: _t,
+      telegramLinkExpiresAt: _e,
+      telegramChatId,
+      ...rest
+    } = updated;
+    return {
+      ...rest,
+      telegramLinked: Boolean(telegramChatId),
+    };
   }
 }

@@ -70,6 +70,12 @@ export class ProjectsController {
     description: 'Maximum price per m² in project (UZS)',
     type: Number,
   })
+  @ApiQuery({
+    name: 'hasInstallment',
+    required: false,
+    description: 'Filter projects with (true) or without (false) installment',
+    type: Boolean,
+  })
   @ApiResponse({
     status: 200,
     description: 'List of projects with developer and floor pricing',

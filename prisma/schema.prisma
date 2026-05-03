@@ -16,6 +16,12 @@ model Developer {
     email      String?  @unique
     passwordHash String?
     qrCodeUrl  String?
+    phone              String?
+    legalAddress       String?  @map("legal_address")
+    officeAddress      String?  @map("office_address")
+    website            String?
+    description        String?
+    logoUrl            String?  @map("logo_url")
     telegramChatId       String?   @map("telegram_chat_id")
     telegramLinkToken      String?   @unique @map("telegram_link_token")
     telegramLinkExpiresAt  DateTime? @map("telegram_link_expires_at")
@@ -35,6 +41,18 @@ model Project {
     district     String?
     description  String?
     advantages   String[]
+    materials    String[] @default([])
+    hasInstallment Boolean @default(false) @map("has_installment")
+    buildingCount  Int?    @map("building_count")
+    corpusCount    Int?    @map("corpus_count")
+    ceilingHeightM Float?  @map("ceiling_height_m")
+    hasSurfaceParking     Boolean @default(false) @map("has_surface_parking")
+    hasUndergroundParking Boolean @default(false) @map("has_underground_parking")
+    surfaceParkingSpaces     Int? @map("surface_parking_spaces")
+    undergroundParkingSpaces Int? @map("underground_parking_spaces")
+    elevatorsCount Int?    @map("elevators_count")
+    latitude     Float?
+    longitude    Float?
     mapEmbedUrl  String?
     qrCodeUrl    String?
     totalFloors  Int?

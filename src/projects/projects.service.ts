@@ -1,5 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, SubscriptionPlan, SubscriptionStatus } from '@prisma/client';
+import {
+  Developer,
+  Prisma,
+  SubscriptionPlan,
+  SubscriptionStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { FilterProjectDto } from './dto/filter-project.dto';
@@ -17,6 +22,31 @@ type ProjectWithRelations = Prisma.ProjectGetPayload<{
   };
 }>;
 
+type CarouselProjectPayload = {
+  id: number;
+  name: string;
+  location: string;
+  district: string | null;
+  imageUrl: string;
+  deliveryDate: string;
+  hasInstallment: boolean;
+  latitude: number | null;
+  longitude: number | null;
+  floors: { pricePerM2: number }[];
+  media: { imageUrl: string }[];
+};
+
+type CarouselProjectSummary = {
+  id: number;
+  name: string;
+  location: string;
+  district: string | null;
+  imageUrl: string;
+  deliveryDate: string;
+  hasInstallment: boolean;
+  priceFrom: number | null;
+};
+
 @Injectable()
 export class ProjectsService {
   constructor(private prisma: PrismaService) {}
@@ -25,6 +55,60 @@ export class ProjectsService {
     areaOptions: { orderBy: { sortOrder: 'asc' as const } },
     layouts: { orderBy: { sortOrder: 'asc' as const } },
   };
+
+  private static readonly carouselSelect = {
+    id: true,
+    name: true,
+    location: true,
+    district: true,
+    imageUrl: true,
+    deliveryDate: true,
+    hasInstallment: true,
+    latitude: true,
+    longitude: true,
+    floors: { select: { pricePerM2: true } },
+    media: {
+      orderBy: { sortOrder: 'asc' as const },
+      take: 1,
+      select: { imageUrl: true },
+    },
+  } satisfies Prisma.ProjectSelect;
+
+  static toCatalogDeveloper(developer: Developer) {
+    return {
+      id: developer.id,
+      name: developer.name,
+      email: developer.email,
+      qrCodeUrl: developer.qrCodeUrl,
+      phone: developer.phone,
+      legalAddress: developer.legalAddress,
+      officeAddress: developer.officeAddress,
+      website: developer.website,
+      description: developer.description,
+      logoUrl: developer.logoUrl,
+      createdAt: developer.createdAt,
+    };
+  }
+
+  private static haversineKm(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
+  ): number {
+    const R = 6371;
+    const toRad = (d: number) => (d * Math.PI) / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) *
+        Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
 
   async create(createProjectDto: CreateProjectDto) {
     const { imageUrls, ...projectData } = createProjectDto;
@@ -70,7 +154,10 @@ export class ProjectsService {
         role: 'OWNER',
       },
     });
-    return project;
+    return {
+      ...project,
+      developer: ProjectsService.toCatalogDeveloper(project.developer),
+    };
   }
 
   async findAll(filters?: FilterProjectDto) {
@@ -78,6 +165,13 @@ export class ProjectsService {
 
     if (filters?.location) {
       where.location = { contains: filters.location, mode: 'insensitive' };
+    }
+
+    if (filters?.hasInstallment === true) {
+      where.hasInstallment = true;
+    }
+    if (filters?.hasInstallment === false) {
+      where.hasInstallment = false;
     }
 
     const projects = await this.prisma.project.findMany({
@@ -107,6 +201,55 @@ export class ProjectsService {
   }
 
   async findOne(id: number) {
+    const project = await this.loadProjectOrThrow(id);
+    const enriched = this.enrichProject(project);
+    const [siblingProjects, nearbyProjects] = await Promise.all([
+      this.findSiblingProjects(project),
+      this.findNearbyProjects(project),
+    ]);
+    return { ...enriched, siblingProjects, nearbyProjects };
+  }
+
+  async findFullById(id: number) {
+    return this.findOne(id);
+  }
+
+  async update(id: number, updateProjectDto: UpdateProjectDto) {
+    const currentRaw = await this.loadProjectOrThrow(id);
+    const { imageUrls, ...projectData } = updateProjectDto;
+    this.ensureImageQuota(
+      imageUrls,
+      currentRaw.subscription?.plan ?? SubscriptionPlan.START,
+    );
+
+    const updated = await this.prisma.project.update({
+      where: { id },
+      data: {
+        ...projectData,
+        media: imageUrls
+          ? {
+              deleteMany: {},
+              create: imageUrls.map((imageUrl, index) => ({
+                imageUrl,
+                sortOrder: index,
+              })),
+            }
+          : undefined,
+      },
+      include: {
+        developer: true,
+        floors: { include: ProjectsService.floorInclude },
+        media: true,
+        subscription: true,
+      },
+    });
+    return {
+      ...updated,
+      developer: ProjectsService.toCatalogDeveloper(updated.developer),
+    };
+  }
+
+  private async loadProjectOrThrow(id: number): Promise<ProjectWithRelations> {
     const project = await this.prisma.project.findUnique({
       where: { id },
       include: {
@@ -130,42 +273,101 @@ export class ProjectsService {
       throw new NotFoundException(`Project with ID ${id} not found`);
     }
 
-    return this.enrichProject(project);
+    return project;
   }
 
-  async findFullById(id: number) {
-    return this.findOne(id);
+  private toCarouselProject(row: CarouselProjectPayload): CarouselProjectSummary {
+    const prices = row.floors.map((f) => f.pricePerM2).filter((p) => p > 0);
+    const priceFrom = prices.length ? Math.min(...prices) : null;
+    const thumb =
+      row.imageUrl?.trim() || row.media[0]?.imageUrl?.trim() || '';
+    return {
+      id: row.id,
+      name: row.name,
+      location: row.location,
+      district: row.district,
+      imageUrl: thumb,
+      deliveryDate: row.deliveryDate,
+      hasInstallment: row.hasInstallment,
+      priceFrom,
+    };
   }
 
-  async update(id: number, updateProjectDto: UpdateProjectDto) {
-    const current = await this.findOne(id);
-    const { imageUrls, ...projectData } = updateProjectDto;
-    this.ensureImageQuota(
-      imageUrls,
-      current.subscription?.plan ?? SubscriptionPlan.START,
-    );
-
-    return this.prisma.project.update({
-      where: { id },
-      data: {
-        ...projectData,
-        media: imageUrls
-          ? {
-              deleteMany: {},
-              create: imageUrls.map((imageUrl, index) => ({
-                imageUrl,
-                sortOrder: index,
-              })),
-            }
-          : undefined,
-      },
-      include: {
-        developer: true,
-        floors: { include: ProjectsService.floorInclude },
-        media: true,
-        subscription: true,
-      },
+  private async findSiblingProjects(project: ProjectWithRelations) {
+    const rows = await this.prisma.project.findMany({
+      where: { developerId: project.developerId, id: { not: project.id } },
+      take: 12,
+      orderBy: { id: 'desc' },
+      select: ProjectsService.carouselSelect,
     });
+    return rows.map((r) => this.toCarouselProject(r as CarouselProjectPayload));
+  }
+
+  private async findNearbyProjects(project: ProjectWithRelations) {
+    const limit = 12;
+    const picked = new Set<number>([project.id]);
+    const out: CarouselProjectSummary[] = [];
+
+    const pushUnique = (rows: CarouselProjectPayload[], need: number) => {
+      for (const r of rows) {
+        if (out.length >= need) return;
+        if (picked.has(r.id)) continue;
+        picked.add(r.id);
+        out.push(this.toCarouselProject(r));
+      }
+    };
+
+    if (project.latitude != null && project.longitude != null) {
+      const withCoords = await this.prisma.project.findMany({
+        where: {
+          id: { not: project.id },
+          latitude: { not: null },
+          longitude: { not: null },
+          location: { equals: project.location, mode: 'insensitive' },
+        },
+        take: 80,
+        select: ProjectsService.carouselSelect,
+      });
+      const sorted = (withCoords as CarouselProjectPayload[])
+        .map((p) => ({
+          p,
+          km: ProjectsService.haversineKm(
+            project.latitude!,
+            project.longitude!,
+            p.latitude!,
+            p.longitude!,
+          ),
+        }))
+        .sort((a, b) => a.km - b.km)
+        .map((x) => x.p);
+      pushUnique(sorted, limit);
+    }
+
+    if (out.length < limit && project.district) {
+      const rows = await this.prisma.project.findMany({
+        where: {
+          id: { notIn: [...picked] },
+          district: { equals: project.district, mode: 'insensitive' },
+        },
+        take: limit - out.length + 5,
+        select: ProjectsService.carouselSelect,
+      });
+      pushUnique(rows as CarouselProjectPayload[], limit);
+    }
+
+    if (out.length < limit) {
+      const rows = await this.prisma.project.findMany({
+        where: {
+          id: { notIn: [...picked] },
+          location: { equals: project.location, mode: 'insensitive' },
+        },
+        take: limit - out.length + 8,
+        select: ProjectsService.carouselSelect,
+      });
+      pushUnique(rows as CarouselProjectPayload[], limit);
+    }
+
+    return out;
   }
 
   private projectMatchesFilters(
@@ -173,6 +375,19 @@ export class ProjectsService {
     filters?: FilterProjectDto,
   ): boolean {
     if (!filters) return true;
+
+    if (
+      filters.hasInstallment === true &&
+      project.hasInstallment !== true
+    ) {
+      return false;
+    }
+    if (
+      filters.hasInstallment === false &&
+      project.hasInstallment !== false
+    ) {
+      return false;
+    }
 
     const hasPrice =
       filters.pricePerM2Min != null || filters.pricePerM2Max != null;
@@ -223,8 +438,11 @@ export class ProjectsService {
       comment: feedback.comment,
     }));
 
+    const { developer, ...rest } = project;
+
     return {
-      ...project,
+      ...rest,
+      developer: ProjectsService.toCatalogDeveloper(developer),
       isPopular:
         project.subscription?.plan === SubscriptionPlan.PREMIUM ||
         project.subscription?.plan === SubscriptionPlan.ULTIMATE,
