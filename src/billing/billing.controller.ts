@@ -23,6 +23,7 @@ import { DeveloperAuthGuard } from '../common/guards/developer-auth.guard';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { Request } from 'express';
 import { BillingWebhookDto } from './dto/webhook.dto';
+import { AdminUpdateSubscriptionDto } from './dto/admin-update-subscription.dto';
 
 @ApiTags('billing')
 @Controller('billing')
@@ -214,6 +215,20 @@ export class BillingController {
       dto.projectId,
       dto.status,
     );
+  }
+
+  @Patch('admin/subscription')
+  @UseGuards(AdminGuard)
+  @ApiOperation({
+    summary: '[Admin] Update subscription fields (plan/status/dates)',
+  })
+  @ApiHeader({
+    name: 'x-admin-key',
+    description: 'Admin secret key',
+    required: true,
+  })
+  adminUpdateSubscription(@Body() dto: AdminUpdateSubscriptionDto) {
+    return this.billingService.adminUpdateSubscription(dto);
   }
 
   @Post('admin/confirm-payment')

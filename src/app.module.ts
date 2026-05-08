@@ -12,6 +12,7 @@ import { MediaModule } from './media/media.module';
 import { AuthModule } from './auth/auth.module';
 import { BillingModule } from './billing/billing.module';
 import { FloorsModule } from './floors/floors.module';
+import { PromoModule } from './promo/promo.module';
 import { DeveloperAuthGuard } from './common/guards/developer-auth.guard';
 import { ProjectMemberGuard } from './common/guards/project-member.guard';
 
@@ -34,6 +35,7 @@ import { ProjectMemberGuard } from './common/guards/project-member.guard';
     AuthModule,
     BillingModule,
     FloorsModule,
+    PromoModule,
   ],
   providers: [
     PrismaService,

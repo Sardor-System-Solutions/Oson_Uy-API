@@ -324,6 +324,56 @@ export class BillingService {
     return subscription;
   }
 
+  /** Admin-only: update plan/status and period end */
+  async adminUpdateSubscription(input: {
+    projectId: number;
+    status?: SubscriptionStatus;
+    plan?: SubscriptionPlan;
+    currentPeriodEnd?: string;
+    extendDays?: number;
+  }) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: input.projectId },
+    });
+    if (!project) throw new BadRequestException('Project not found');
+
+    const cur = await this.prisma.projectSubscription.findUnique({
+      where: { projectId: input.projectId },
+    });
+    const now = new Date();
+    const baseEnd = cur?.currentPeriodEnd ?? cur?.trialEndsAt ?? now;
+    const extended =
+      input.extendDays && input.extendDays > 0
+        ? new Date(Math.max(baseEnd.getTime(), now.getTime()) + input.extendDays * 24 * 60 * 60 * 1000)
+        : null;
+    const explicitEnd = input.currentPeriodEnd ? new Date(input.currentPeriodEnd) : null;
+    const nextEnd = explicitEnd ?? extended ?? cur?.currentPeriodEnd ?? null;
+
+    const subscription = await this.prisma.projectSubscription.upsert({
+      where: { projectId: input.projectId },
+      update: {
+        ...(input.status ? { status: input.status } : {}),
+        ...(input.plan ? { plan: input.plan } : {}),
+        ...(nextEnd ? { currentPeriodEnd: nextEnd } : {}),
+        ...(input.status === SubscriptionStatus.TRIAL
+          ? { trialStartsAt: now, trialEndsAt: nextEnd ?? new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000) }
+          : {}),
+      },
+      create: {
+        projectId: input.projectId,
+        status: input.status ?? SubscriptionStatus.TRIAL,
+        plan: input.plan ?? SubscriptionPlan.START,
+        trialStartsAt: null,
+        trialEndsAt: null,
+        currentPeriodStart: input.status === SubscriptionStatus.ACTIVE ? now : null,
+        currentPeriodEnd: nextEnd,
+      },
+      include: { project: true },
+    });
+
+    return subscription;
+  }
+
   /** Admin-only: confirm a pending invoice as paid and activate subscription */
   async adminConfirmPayment(invoiceId: number) {
     const invoice = await this.prisma.billingInvoice.findUnique({
