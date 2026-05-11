@@ -32,4 +32,11 @@ export class UpdateCustomerDto {
   @IsOptional()
   @IsString()
   notes?: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  monthlyDueUzs?: number | null;
 }

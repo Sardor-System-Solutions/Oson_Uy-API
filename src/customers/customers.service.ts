@@ -64,6 +64,7 @@ export class CustomersService {
               id: true,
               number: true,
               floor: true,
+              sectionKey: true,
               rooms: true,
               areaSqm: true,
               status: true,
@@ -109,6 +110,7 @@ export class CustomersService {
         accessCode,
         verificationToken,
         totalPriceUzs: dto.totalPriceUzs ?? null,
+        monthlyDueUzs: dto.monthlyDueUzs ?? null,
         notes: dto.notes?.trim() || null,
       },
       include: { apartment: true },
@@ -168,6 +170,9 @@ export class CustomersService {
           ? { totalPriceUzs: dto.totalPriceUzs }
           : {}),
         ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+        ...(dto.monthlyDueUzs !== undefined
+          ? { monthlyDueUzs: dto.monthlyDueUzs }
+          : {}),
       },
       include: { apartment: true, payments: true, documents: true },
     });
@@ -339,6 +344,7 @@ export class CustomersService {
         paidUzs: paid,
         remainingUzs: remaining,
         debtUzs: remaining,
+        monthlyDueUzs: customer.monthlyDueUzs,
       },
       payments: customer.payments,
       documents: customer.documents,

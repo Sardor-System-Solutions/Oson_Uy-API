@@ -36,4 +36,14 @@ export class CreateCustomerDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiProperty({
+    required: false,
+    description: 'Сумма к оплате в текущем месяце (UZS), задаётся застройщиком',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  monthlyDueUzs?: number | null;
 }
