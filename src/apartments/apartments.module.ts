@@ -5,6 +5,7 @@ import { ApartmentsService } from './apartments.service';
 import { ApartmentsController } from './apartments.controller';
 import { DeveloperAuthGuard } from '../common/guards/developer-auth.guard';
 import { ProjectMemberGuard } from '../common/guards/project-member.guard';
+import { ProjectUltimatePlanGuard } from '../common/guards/project-ultimate-plan.guard';
 
 @Module({
   imports: [AuthModule],
@@ -14,6 +15,7 @@ import { ProjectMemberGuard } from '../common/guards/project-member.guard';
     PrismaService,
     DeveloperAuthGuard,
     ProjectMemberGuard,
+    ProjectUltimatePlanGuard,
   ],
   exports: [ApartmentsService],
 })

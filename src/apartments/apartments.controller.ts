@@ -20,6 +20,7 @@ import {
 import { Request } from 'express';
 import { DeveloperAuthGuard } from '../common/guards/developer-auth.guard';
 import { ProjectMemberGuard } from '../common/guards/project-member.guard';
+import { ProjectUltimatePlanGuard } from '../common/guards/project-ultimate-plan.guard';
 import { ApartmentsService } from './apartments.service';
 import { CreateApartmentDto } from './dto/create-apartment.dto';
 import { UpdateApartmentDto } from './dto/update-apartment.dto';
@@ -29,7 +30,7 @@ import { BulkGenerateApartmentsDto } from './dto/bulk-generate-apartments.dto';
 @ApiTags('apartments')
 @ApiBearerAuth()
 @Controller('projects/:projectId/apartments')
-@UseGuards(DeveloperAuthGuard, ProjectMemberGuard)
+@UseGuards(DeveloperAuthGuard, ProjectMemberGuard, ProjectUltimatePlanGuard)
 export class ApartmentsController {
   constructor(private readonly apartmentsService: ApartmentsService) {}
 

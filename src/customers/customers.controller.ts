@@ -19,6 +19,7 @@ import {
 import { Request } from 'express';
 import { DeveloperAuthGuard } from '../common/guards/developer-auth.guard';
 import { ProjectMemberGuard } from '../common/guards/project-member.guard';
+import { ProjectUltimatePlanGuard } from '../common/guards/project-ultimate-plan.guard';
 import { CustomersService } from './customers.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
@@ -30,7 +31,7 @@ import { CreateCustomerDocumentDto } from './dto/create-customer-document.dto';
 @ApiTags('customers')
 @ApiBearerAuth()
 @Controller('projects/:projectId/customers')
-@UseGuards(DeveloperAuthGuard, ProjectMemberGuard)
+@UseGuards(DeveloperAuthGuard, ProjectMemberGuard, ProjectUltimatePlanGuard)
 export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}
 
